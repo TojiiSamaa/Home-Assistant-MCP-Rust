@@ -13,6 +13,9 @@ pub const ATTENTE_MAX_MS: u64 = 20_000;
 const LIMITE_ETATS: u64 = 200;
 const HEURES: f64 = 24.0;
 const DOMAINES_AUTOMATISMES: [&str; 3] = ["automation", "script", "scene"];
+/// Helpers sans assistant (pas de config_flow) : collections de HA, commandes <domaine>/list|create|update|delete.
+const HELPERS: [&str; 9] = ["input_boolean", "input_number", "input_text", "input_select", "input_datetime", "input_button", "timer", "counter", "schedule"];
+const ACTIONS_HELPER: [(&str, &str); 4] = [("lister", "list"), ("creer", "create"), ("modifier", "update"), ("supprimer", "delete")];
 /// Registres : nom de l'outil → commande de liste.
 const REGISTRES: [(&str, &str); 5] = [
     ("entites", "config/entity_registry/list"),
@@ -116,12 +119,19 @@ pub fn generiques(absentes: &BTreeSet<String>, lecture_seule: bool) -> Vec<Def> 
           obj(json!({"item_type": {"type": "string", "description": "area, automation, config_entry, device, entity, floor, group, label, scene, script…"}, "item_id": {"type": "string"}}), &["item_type", "item_id"])),
         d("integrations", true, None, "Intégrations : chargées (get_config), entrées de configuration (domaine, titre, état), et domaines qu'on peut ajouter par assistant (flow_handlers). Filtrable par sous-chaîne.",
           obj(json!({"filtre": {"type": "string"}}), &[])),
-        d("flux_demarrer", false, None, "Démarre l'assistant d'ajout d'une intégration ou d'une entrée (helper) : POST /api/config/config_entries/flow {handler}. Renvoie flow_id et la première étape (formulaire, menu, ou create_entry si rien n'est demandé).",
+        d("flux_demarrer", false, None, "Démarre l'assistant d'ajout d'une intégration, ou d'un helper qui a un assistant (template, group, utility_meter…) : POST /api/config/config_entries/flow {handler}. Renvoie flow_id et la première étape (formulaire, menu, ou create_entry si rien n'est demandé). Les helpers input_*, timer, counter et schedule n'ont pas d'assistant : outil helper.",
           obj(json!({"handler": {"type": "string", "description": "domaine de l'intégration (integrations → disponibles)"}, "show_advanced_options": {"type": "boolean"}}), &["handler"])),
         d("flux_etape", false, None, "Répond à une étape d'un assistant : POST /api/config/config_entries/flow/{flow_id} avec les valeurs du formulaire (data_schema de l'étape), ou {\"next_step_id\": …} pour un menu.",
           obj(json!({"flow_id": {"type": "string"}, "data": {"type": "object"}}), &["flow_id"])),
         d("flux_annuler", false, None, "Abandonne un assistant en cours (DELETE /api/config/config_entries/flow/{flow_id}).",
           obj(json!({"flow_id": {"type": "string"}}), &["flow_id"])),
+        d("helper", false, None, "Helpers sans assistant (input_boolean, input_number, input_text, input_select, input_datetime, input_button, timer, counter, schedule) : lister, creer, modifier, supprimer (commandes <domaine>/list, create, update, delete). L'entité (ex. input_boolean.<id>) apparaît aussitôt.",
+          obj(json!({
+              "action": {"type": "string", "enum": ACTIONS_HELPER.map(|a| a.0)},
+              "domaine": {"type": "string", "enum": HELPERS},
+              "id": {"type": "string", "description": "modifier, supprimer : id du helper (champ id de lister, pas l'entity_id)"},
+              "champs": {"type": "object", "description": "creer, modifier : ex. {name, icon} ; input_number {min, max, step, mode} ; input_select {options} ; input_text {min, max, pattern, mode} ; input_datetime {has_date, has_time} ; timer {duration: \"00:05:00\"} ; counter {initial, step, minimum, maximum} ; schedule {monday: [{from: \"07:00:00\", to: \"09:00:00\"}], …}"},
+          }), &["action", "domaine"])),
         d("tableaux_lister", true, Some(LOVELACE), "Tableaux de bord (lovelace/dashboards/list). Le tableau par défaut n'y figure pas : son url_path est absent (null).",
           obj(json!({}), &[])),
         d("tableau_lire", true, Some(LOVELACE), "Contenu (views, cards) d'un tableau de bord (lovelace/config). Sans url_path : le tableau par défaut.",
@@ -263,6 +273,7 @@ pub async fn executer(app: &App, nom: &str, a: Map<String, Value>) -> Option<Iss
             Ok(h) => {
                 let avance = a.get("show_advanced_options") == Some(&json!(true));
                 corps(app.ha.rest("POST", "/api/config/config_entries/flow", Some(&json!({"handler": h, "show_advanced_options": avance}))).await)
+                    .map_err(|e| if HELPERS.contains(&h.as_str()) { format!("{e} — {h} n'a pas d'assistant : utiliser l'outil helper {{action: \"creer\", domaine: \"{h}\"}}") } else { e })
             }
             Err(e) => Err(e),
         },
@@ -274,6 +285,7 @@ pub async fn executer(app: &App, nom: &str, a: Map<String, Value>) -> Option<Iss
             Ok(f) => app.ha.rest("DELETE", &format!("/api/config/config_entries/flow/{f}"), None).await.and_then(|r| r.issue()),
             Err(e) => Err(e),
         },
+        "helper" => helper(app, &a).await,
         "tableaux_lister" => res(app, json!({"type": LOVELACE})).await,
         "tableau_lire" => res(app, json!({"type": "lovelace/config", "url_path": present(&a, "url_path")})).await,
         "tableau_enregistrer" => match present(&a, "config").filter(|c| c.is_object()) {
@@ -476,6 +488,29 @@ async fn integrations(app: &App, a: &Map<String, Value>) -> Issue {
         Err(e) => json!(format!("indisponible : {e}")),
     };
     Ok(texte(&json!({"chargees": chargees, "entrees": entrees, "disponibles": disponibles, "ajouter": "flux_demarrer {handler} puis flux_etape jusqu'à create_entry"})))
+}
+
+async fn helper(app: &App, a: &Map<String, Value>) -> Issue {
+    let action = requis(a, "action")?;
+    let (_, commande) = ACTIONS_HELPER.iter().find(|(n, _)| *n == action).ok_or(format!("« action » : lister, creer, modifier ou supprimer, pas « {action} »"))?;
+    let d = requis(a, "domaine")?;
+    if !HELPERS.contains(&d) {
+        return Err(format!("« domaine » : {}, pas « {d} » (helper à assistant : flux_demarrer)", HELPERS.join(", ")));
+    }
+    let mut m = Map::new();
+    if matches!(*commande, "create" | "update") {
+        match present(a, "champs") {
+            Some(Value::Object(c)) => m.extend(c.clone()),
+            None if *commande == "update" => return Err("« champs » (objet) est requis pour modifier".into()),
+            None => {}
+            Some(_) => return Err("« champs » doit être un objet".into()),
+        }
+    }
+    if matches!(*commande, "update" | "delete") {
+        m.insert(format!("{d}_id"), json!(requis(a, "id")?));
+    }
+    m.insert("type".into(), json!(format!("{d}/{commande}")));
+    res(app, Value::Object(m)).await
 }
 
 async fn page_creer(app: &App, a: &Map<String, Value>) -> Issue {

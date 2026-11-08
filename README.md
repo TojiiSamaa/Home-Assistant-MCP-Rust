@@ -37,6 +37,7 @@ Les outils génériques sont toujours là, sauf si le serveur n'a pas la capacit
 | Historique | `historique`, `journal` |
 | Registres et liens | `registres` (entités, appareils, pièces, étages, étiquettes), `recherche_liee` |
 | Intégrations (assistants) | `integrations`, `flux_demarrer`, `flux_etape`, `flux_annuler` |
+| Helpers (input_*, timer, counter, schedule) | `helper` (lister, créer, modifier, supprimer) |
 | Tableaux de bord et barre latérale | `tableaux_lister`, `tableau_lire`, `tableau_enregistrer`, `page_creer`, `page_modifier`, `page_supprimer`, `barre_regler` |
 | Automatisations, scripts, scènes | `automatisme_lire`, `automatisme_ecrire`, `automatisme_supprimer` |
 | Presets (pages, thème, barre) | `presets_lister`, `preset_appliquer`, `preset_annuler`, `preset_exporter` |
@@ -205,6 +206,7 @@ The generic tools are always there, unless the server lacks the capability they 
 | History | `historique`, `journal` |
 | Registries and links | `registres` (entities, devices, areas, floors, labels), `recherche_liee` |
 | Integrations (config flows) | `integrations`, `flux_demarrer`, `flux_etape`, `flux_annuler` |
+| Helpers (input_*, timer, counter, schedule) | `helper` (list, create, update, delete) |
 | Dashboards and sidebar | `tableaux_lister`, `tableau_lire`, `tableau_enregistrer`, `page_creer`, `page_modifier`, `page_supprimer`, `barre_regler` |
 | Automations, scripts, scenes | `automatisme_lire`, `automatisme_ecrire`, `automatisme_supprimer` |
 | Presets (dashboards, theme, sidebar) | `presets_lister`, `preset_appliquer`, `preset_annuler`, `preset_exporter` |
