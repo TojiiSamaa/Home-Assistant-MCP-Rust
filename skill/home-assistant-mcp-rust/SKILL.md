@@ -23,7 +23,8 @@ liste exacte de l'instance connectée, en markdown (un exemple sur une instance 
 | Ce qui dépend d'un élément | `recherche_liee` |
 | Tableaux de bord | `tableaux_lister`, `tableau_lire`, `tableau_enregistrer`, `page_creer`, `page_modifier`, `page_supprimer` |
 | Barre latérale | `barre_regler` |
-| Ajouter une intégration ou un helper | `integrations` (→ `disponibles`) puis `flux_demarrer` → `flux_etape`… → `create_entry` |
+| Ajouter une intégration ou un helper à assistant (template, group…) | `integrations` (→ `disponibles`) puis `flux_demarrer` → `flux_etape`… → `create_entry` |
+| Helpers input_*, timer, counter, schedule | `helper` (lister, creer, modifier, supprimer) |
 | Automatisations, scripts, scènes | `automatisme_lire`, `automatisme_ecrire`, `automatisme_supprimer` |
 | Une configuration toute faite (pages, thème, barre) | `presets_lister`, `preset_appliquer`, `preset_annuler`, `preset_exporter` |
 | Tout le reste | `ws` (n'importe quelle commande WebSocket), `rest` (n'importe quelle route sous /api/) |
@@ -197,7 +198,7 @@ Intégrations : chargées (get_config), entrées de configuration (domaine, titr
 
 *écriture (retiré par --lecture-seule)*
 
-Démarre l'assistant d'ajout d'une intégration ou d'une entrée (helper) : POST /api/config/config_entries/flow {handler}. Renvoie flow_id et la première étape (formulaire, menu, ou create_entry si rien n'est demandé).
+Démarre l'assistant d'ajout d'une intégration, ou d'un helper qui a un assistant (template, group, utility_meter…) : POST /api/config/config_entries/flow {handler}. Renvoie flow_id et la première étape (formulaire, menu, ou create_entry si rien n'est demandé). Les helpers input_*, timer, counter et schedule n'ont pas d'assistant : outil helper.
 
 | paramètre | type | requis | description |
 |---|---|---|---|
@@ -224,6 +225,19 @@ Abandonne un assistant en cours (DELETE /api/config/config_entries/flow/{flow_id
 | paramètre | type | requis | description |
 |---|---|---|---|
 | `flow_id` | texte | oui |  |
+
+### `helper`
+
+*écriture (retiré par --lecture-seule)*
+
+Helpers sans assistant (input_boolean, input_number, input_text, input_select, input_datetime, input_button, timer, counter, schedule) : lister, creer, modifier, supprimer (commandes <domaine>/list, create, update, delete). L'entité (ex. input_boolean.<id>) apparaît aussitôt.
+
+| paramètre | type | requis | description |
+|---|---|---|---|
+| `action` | lister / creer / modifier / supprimer | oui |  |
+| `domaine` | input_boolean / input_number / input_text / input_select / input_datetime / input_button / timer / counter / schedule | oui |  |
+| `id` | texte |  | modifier, supprimer : id du helper (champ id de lister, pas l'entity_id) |
+| `champs` | objet |  | creer, modifier : ex. {name, icon} ; input_number {min, max, step, mode} ; input_select {options} ; input_text {min, max, pattern, mode} ; input_datetime {has_date, has_time} ; timer {duration: "00:05:00"} ; counter {initial, step, minimum, maximum} ; schedule {monday: [{from: "07:00:00", to: "09:00:00"}], …} |
 
 ### `tableaux_lister`
 

@@ -97,6 +97,10 @@ fn reponse(f: &Partage, m: &Value) -> Value {
             f.appels.push(m.clone());
             ok(json!({"context": {"id": "c"}}))
         }
+        _ if t.starts_with("counter/") => {
+            f.appels.push(m.clone());
+            ok(json!({"id": "compteur"}))
+        }
         _ => ok(Value::Null),
     }
 }
@@ -221,6 +225,33 @@ async fn outil_de_service_et_generiques() {
     // markdown de l'instance
     let md = outils::markdown(&a);
     assert!(md.contains("Home Assistant faux") && md.contains("### light (2)") && md.contains("`brightness` (nombre 0…255)"), "{md}");
+}
+
+#[tokio::test]
+async fn helpers_sans_assistant() {
+    let (base, f) = faux_ha(services_de_base(), vec![]).await;
+    let a = app(&base, Options::default());
+    a.redecouvrir().await.unwrap();
+    let ok = |r: Value| assert_eq!(r["isError"], false, "{r}");
+    ok(appel(&a, "helper", json!({"action": "creer", "domaine": "counter", "champs": {"name": "Tasses", "step": 2}})).await);
+    ok(appel(&a, "helper", json!({"action": "modifier", "domaine": "counter", "id": "compteur", "champs": {"name": "Cafés"}})).await);
+    ok(appel(&a, "helper", json!({"action": "supprimer", "domaine": "counter", "id": "compteur"})).await);
+    ok(appel(&a, "helper", json!({"action": "lister", "domaine": "counter"})).await);
+    let appels: Vec<Value> = f.lock().unwrap().appels.iter().map(|m| { let mut m = m.clone(); m.as_object_mut().unwrap().remove("id"); m }).collect();
+    assert_eq!(appels, [
+        json!({"type": "counter/create", "name": "Tasses", "step": 2}),
+        json!({"type": "counter/update", "counter_id": "compteur", "name": "Cafés"}),
+        json!({"type": "counter/delete", "counter_id": "compteur"}),
+        json!({"type": "counter/list"}),
+    ]);
+    // refusés avant d'atteindre HA
+    for args in [json!({"action": "creer", "domaine": "template"}), json!({"action": "modifier", "domaine": "counter", "champs": {}}), json!({"action": "supprimer", "domaine": "counter"}), json!({"action": "vider", "domaine": "counter"})] {
+        assert_eq!(appel(&a, "helper", args.clone()).await["isError"], true, "{args}");
+    }
+    assert_eq!(f.lock().unwrap().appels.len(), 4);
+    // flux_demarrer sur un helper sans assistant : l'erreur oriente vers helper
+    let r = appel(&a, "flux_demarrer", json!({"handler": "input_boolean"})).await;
+    assert!(r["isError"] == true && r["content"][0]["text"].as_str().unwrap().contains("outil helper"), "{r}");
 }
 
 #[tokio::test]

@@ -661,6 +661,43 @@ def tester(cible, image_mcp, sortie):
             ):
                 err, t = mcp.outil("script__hamcp_test", {})
                 ok(res, "appel_script__hamcp_test", not err, t)
+
+        # helper sans assistant (issue 2) : créer, voir l'entité, modifier, supprimer
+        err, t = mcp.outil(
+            "helper",
+            {
+                "action": "creer",
+                "domaine": "input_boolean",
+                "champs": {"name": "HAMCP helper", "icon": "mdi:test-tube"},
+            },
+        )
+        cree = json.loads(t) if not err else {}
+        if ok(res, "helper_cree", cree.get("id") == "hamcp_helper", t):
+            err, t = mcp.outil("etats", {"entity_id": "input_boolean.hamcp_helper"})
+            ok(res, "helper_entite", not err and '"off"' in t, t)
+            err, t = mcp.outil(
+                "helper",
+                {
+                    "action": "modifier",
+                    "domaine": "input_boolean",
+                    "id": "hamcp_helper",
+                    "champs": {"name": "HAMCP renomme"},
+                },
+            )
+            ok(res, "helper_modifie", not err and "HAMCP renomme" in t, t)
+            err, t = mcp.outil(
+                "helper",
+                {
+                    "action": "supprimer",
+                    "domaine": "input_boolean",
+                    "id": "hamcp_helper",
+                },
+            )
+            ok(res, "helper_supprime", not err, t)
+            err, t = mcp.outil(
+                "helper", {"action": "lister", "domaine": "input_boolean"}
+            )
+            ok(res, "helper_liste_sans_lui", not err and "hamcp_helper" not in t, t)
         res["outils_apres"] = len(mcp.outils())
 
         # lecture seule
