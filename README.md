@@ -134,6 +134,8 @@ cp -r skill/home-assistant-mcp-rust ~/.claude/skills/
 
 Sous Windows : `Copy-Item -Recurse skill\home-assistant-mcp-rust $HOME\.claude\skills\`.
 
+Skill portable (Claude Code, OpenCode, Hermes, Cursor, Codex) : copie le dossier dans le dossier de skills de ton client, ou laisse [AGENTS.md](AGENTS.md) la désigner ; `sh tests/verifier-skill.sh` vérifie qu'elle liste les 29 outils fixes.
+
 ### Exemples
 
 Ce que tu peux demander une fois le serveur branché :

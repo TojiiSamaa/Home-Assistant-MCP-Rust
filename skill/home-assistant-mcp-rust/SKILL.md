@@ -1,6 +1,6 @@
 ---
 name: home-assistant-mcp-rust
-description: Piloter une instance Home Assistant (ou maison) par le serveur MCP « Home Assistant MCP Rust » (binaire ha-mcp) : états, services (un outil par service, domaine__service), modèles Jinja, historique, journal, registres, tableaux de bord, barre latérale, intégrations à ajouter, automatisations/scripts/scènes, presets de préconfiguration, et toute commande WebSocket ou route REST. Déclencheurs : « allume/éteins … », « quel est l'état de … », « crée un tableau de bord », « ajoute l'intégration … », « écris une automatisation », « historique de … », « Home Assistant », « HA », outils mcp__ha__* ou noms domaine__service. PAS pour installer ou mettre à jour Home Assistant lui-même.
+description: Piloter une instance Home Assistant (ou maison) par le serveur MCP « Home Assistant MCP Rust » (binaire ha-mcp) : états, services (un outil par service, domaine__service), modèles Jinja, historique, journal, registres, tableaux de bord, barre latérale, intégrations à ajouter, automatisations/scripts/scènes, presets de préconfiguration, et toute commande WebSocket ou route REST. Déclencheurs : « allume/éteins … », « quel est l'état de … », « crée un tableau de bord », « ajoute l'intégration … », « écris une automatisation », « historique de … », « Home Assistant », « HA », outils du serveur MCP Home Assistant ou noms domaine__service. PAS pour installer ou mettre à jour Home Assistant lui-même.
 ---
 
 # Home Assistant MCP Rust
@@ -28,7 +28,80 @@ liste exacte de l'instance connectée, en markdown (un exemple sur une instance 
 | Une configuration toute faite (pages, thème, barre) | `presets_lister`, `preset_appliquer`, `preset_annuler`, `preset_exporter` |
 | Tout le reste | `ws` (n'importe quelle commande WebSocket), `rest` (n'importe quelle route sous /api/) |
 
-## Recettes
+## Outils fixes
+
+<!-- outils-fixes:debut -->
+
+29 outils, toujours dans `tools/list` sauf si l'instance n'a pas la capacité (commande inconnue) ou si `--lecture-seule` retire l'outil. Noms nus, tels que le serveur les expose ; ton client peut les préfixer (`mcp__ha__etats`, `ha_etats`…). Détail complet de chaque paramètre : section « Outils génériques » plus bas.
+
+| Outil | Rôle | Paramètres (* = requis) | Exemple |
+|---|---|---|---|
+| `etats` | Lire les états des entités | `entity_id`, `domaine`, `piece`, `recherche`, `attributs`, `limite` | `{piece: "salon", domaine: "light"}` |
+| `services` | Décrire les services (champs, cible) | `domaine` | `{domaine: "light"}` |
+| `appeler_service` | Appeler n'importe quel service | `domain`*, `service`*, `data`, `target`, `return_response` | `{domain: "light", service: "turn_off", target: {area_id: "salon"}}` |
+| `template` | Rendre un modèle Jinja de HA | `template`*, `variables` | `{template: "{{ states('sun.sun') }}"}` |
+| `historique` | Historique d'états | `entity_ids`*, `debut`, `fin`, `heures`, `attributs` | `{entity_ids: "sensor.temp_salon", heures: 6}` |
+| `journal` | Journal d'événements lisible | `entity_id`, `debut`, `fin`, `heures` | `{entity_id: "binary_sensor.porte_entree"}` |
+| `registres` | Entités, appareils, pièces, étages, étiquettes | `type`*, `filtre` | `{type: "pieces"}` |
+| `recherche_liee` | Ce qui dépend d'un élément | `item_type`*, `item_id`* | `{item_type: "device", item_id: "abc123"}` |
+| `integrations` | Intégrations chargées, entrées, disponibles | `filtre` | `{filtre: "shopping"}` |
+| `flux_demarrer` | Ouvrir l'assistant d'une intégration | `handler`*, `show_advanced_options` | `{handler: "shopping_list"}` |
+| `flux_etape` | Répondre à une étape d'assistant | `flow_id`*, `data` | `{flow_id: "…", data: {}}` |
+| `flux_annuler` | Abandonner un assistant | `flow_id`* | `{flow_id: "…"}` |
+| `tableaux_lister` | Lister les tableaux de bord | aucun | `{}` |
+| `tableau_lire` | Lire le contenu d'un tableau | `url_path` | `{url_path: "salon-tablette"}` |
+| `tableau_enregistrer` | Remplacer le contenu d'un tableau | `url_path`, `config`* | `{url_path: "salon-tablette", config: {views: []}}` |
+| `page_creer` | Créer un tableau (et son contenu) | `url_path`*, `title`*, `icon`, `show_in_sidebar`, `require_admin`, `config` | `{url_path: "cuisine-tablette", title: "Cuisine"}` |
+| `page_modifier` | Changer titre, icône, visibilité, contenu | `url_path`, `title`, `icon`, `show_in_sidebar`, `require_admin`, `config` | `{url_path: "cuisine-tablette", icon: "mdi:stove"}` |
+| `page_supprimer` | Supprimer un tableau | `url_path`* | `{url_path: "cuisine-tablette"}` |
+| `barre_regler` | Ordre et masquage de la barre latérale | `ordre`, `masques` | `{masques: ["energy"]}` |
+| `automatisme_lire` | Lister / lire automatisations, scripts, scènes | `domaine`*, `id` | `{domaine: "automation"}` |
+| `automatisme_ecrire` | Créer ou remplacer l'un des trois | `domaine`*, `id`*, `config`* | `{domaine: "script", id: "bonne_nuit", config: {sequence: []}}` |
+| `automatisme_supprimer` | Supprimer l'un des trois | `domaine`*, `id`* | `{domaine: "scene", id: "film"}` |
+| `presets_lister` | Lister les presets | aucun | `{}` |
+| `preset_appliquer` | Appliquer un preset (pages, thème, barre) | `preset`*, `parametres`, `morceaux`, `pour` | `{preset: "tableau-minimal", morceaux: ["pages"]}` |
+| `preset_annuler` | Annuler le dernier preset appliqué | aucun | `{}` |
+| `preset_exporter` | Faire un preset de la configuration actuelle | `preset`*, `nom`, `description`, `pages`, `remplacer` | `{preset: "ma-maison"}` |
+| `ws` | Toute commande WebSocket de HA | `type`*, `attente_ms`, champs de la commande | `{type: "config/area_registry/list"}` |
+| `rest` | Toute requête REST sous `/api/` | `path`*, `method`, `body` | `{path: "/api/config"}` |
+| `lister_outils` | Liste markdown des outils de l'instance | aucun | `{}` |
+
+<!-- outils-fixes:fin -->
+
+## Outils dynamiques
+
+Un outil par service de l'instance (`get_services`), reconstruit à chaque changement.
+- **Nom** : `domaine__service` (deux soulignés), ex. `light__turn_on`, `shopping_list__add_item`. Contrainte MCP `^[a-zA-Z0-9_-]{1,64}$` : un nom trop long ou nettoyé devient ses 55 premiers caractères + `_` + 8 hex déterministes (rare ; `lister_outils` donne le vrai nom).
+- **Schéma** : un paramètre par champ du service (sélecteurs HA convertis en JSON Schema, champs requis marqués) ; `target` (`entity_id`, `device_id`, `area_id`, `floor_id`, `label_id`, texte ou liste) si le service accepte une cible ; `return_response` (booléen) si la réponse est facultative, imposée d'office si elle est obligatoire.
+- **Lister** : `tools/list` (le client le fait), ou `lister_outils` (markdown, génériques + services avec paramètres), ou `services {domaine}` pour la description brute d'un domaine.
+- **Évolution** : `notifications/tools/list_changed` quand un service apparaît ou disparaît (ajout d'intégration, script créé) ; nouvelle liste en quelques secondes, relue aussi toutes les 30 s.
+- **Limites** : `--domaines`, `--sans-domaines`, `--max-services N` réduisent la liste (`appeler_service` reste) ; `--lecture-seule` retire TOUS les outils de service. Ces outils n'ont pas de `readOnlyHint` : les croire potentiellement actifs.
+- **Exemples** : `light__turn_on {target: {entity_id: "light.salon"}, brightness_pct: 50}` ; `climate__set_temperature {target: {entity_id: "climate.salon"}, temperature: 20}` ; `weather__get_forecasts {target: {entity_id: "weather.maison"}, type: "daily"}` (réponse renvoyée d'office).
+
+## Possible
+
+- Lire : états, services, registres, historique, journal, modèles Jinja, intégrations, tableaux, automatisations/scripts/scènes, liens entre éléments.
+- Agir : tout service HA (outil dédié ou `appeler_service`), ajouter une intégration par assistant, créer/modifier/supprimer tableaux de bord, automatisations, scripts, scènes, régler la barre latérale, appliquer/annuler/exporter des presets.
+- Le reste via `ws` (toute commande WebSocket) et `rest` (toute route `/api/`).
+- Le serveur agit avec les droits du jeton longue durée de son utilisateur HA, pas plus : certains outils demandent un utilisateur **administrateur** (registres, tableaux, assistants d'intégration, automatisations).
+- Mode `--lecture-seule` : seuls restent les outils de lecture ; `ws` limité aux commandes de lecture (`get_*`, `subscribe_*`, `*/list`, `*/get`, `*/info`), `rest` au GET.
+
+## Impossible
+
+- Installer, mettre à jour ou redémarrer Home Assistant lui-même, gérer les add-ons ou le Supervisor : aucun outil dédié (DÉDUIT : `ws`/`rest` ne couvrent que le WebSocket et `/api/` de Core).
+- Dépasser les droits du jeton : utilisateur non administrateur = erreurs sur registres, tableaux, assistants, automatisations. Le serveur ne contourne rien.
+- Installer des cartes HACS : un preset les signale, ne les installe pas.
+- Modifier un tableau de bord en mode YAML, ou une automatisation venue du YAML (sans `id`) : refusé par Home Assistant.
+- Lire une réponse de plus de 100 000 octets : elle est coupée ; filtrer.
+- Sous `--lecture-seule` : aucune écriture, aucun outil de service, même via `ws`/`rest`.
+- Un outil absent de la liste n'est pas forcément une panne : capacité absente de l'instance, ou filtre (`--domaines`, `--max-services`) ; voir `lister_outils`.
+- Piège de sécurité : `ws` et `rest` sont annotés lecture seule (`readOnlyHint`) mais ÉCRIVENT hors `--lecture-seule`. Ne les croire inoffensifs que dans ce mode.
+
+## Comment faire
+
+Ordre général : `lister_outils` (ou `etats`, `registres`) pour savoir ce qui existe, lire avant d'écrire, écrire, relire pour vérifier.
+
+### Recettes
 
 **Allumer une lumière à 50 %** : `light__turn_on {target: {entity_id: "light.salon"}, brightness_pct: 50}`. La cible
 accepte aussi `area_id`, `device_id`, `floor_id`, `label_id` (texte ou liste).
@@ -63,7 +136,7 @@ utilisateurs. Revenir en arrière : `preset_annuler`.
 **Une commande sans outil dédié** : `ws {type: "config/entity_registry/update", entity_id: "light.salon", name:
 "Plafonnier"}` ; `ws {type: "subscribe_trigger", trigger: {…}, attente_ms: 5000}` collecte des événements 5 s.
 
-## Pièges
+### Pièges
 
 - Un outil absent de la liste n'est pas une erreur : la capacité manque sur ce serveur (commande inconnue, détectée
   en l'essayant) ou le mode `--lecture-seule` l'a retiré. `lister_outils` dit lesquelles manquent.
@@ -76,6 +149,15 @@ utilisateurs. Revenir en arrière : `preset_annuler`.
   `historique` sur moins d'heures).
 - `historique` et `journal` prennent des dates ISO 8601 ; sans date, les 24 dernières heures.
 - Le thème et la barre latérale réglés par `barre_regler` et les presets sont ceux de l'utilisateur du jeton.
+
+### Erreurs et remèdes
+
+- 401/403, « unauthorized » : jeton invalide, expiré ou utilisateur non administrateur. En créer un (profil HA, Sécurité, jetons longue durée) ; ne pas réessayer en boucle.
+- `unknown_command` ou route 404 : l'instance n'a pas la capacité ; passer par `ws`/`rest` ou renoncer.
+- Erreur de validation sur `automatisme_ecrire` : copier la forme d'une automatisation existante (`automatisme_lire`) ; clés `trigger`/`action` sur HA ancien, `triggers`/`actions` sur récent.
+- `abort` dans un assistant : déjà configuré ou matériel absent ; lire `reason`, ne pas insister.
+- Entité introuvable : `etats {recherche}` ou `registres {type: "entites", filtre}` avant de deviner un `entity_id`.
+- Outil de service absent juste après un ajout d'intégration : attendre quelques secondes (`list_changed`), sinon `appeler_service`.
 
 ## Outils génériques
 
