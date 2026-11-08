@@ -8,6 +8,7 @@ use std::time::Duration;
 
 use ha_mcp::ha::Ha;
 use ha_mcp::schema::Filtre;
+use ha_mcp::simule::Approbateur;
 use ha_mcp::{App, Options, erreur_rpc, outils};
 use serde_json::{Value, json};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
@@ -26,6 +27,9 @@ Options (et variables d'environnement) :
   --domaines a,b               outils de service de ces domaines seulement (HA_MCP_DOMAINES)
   --sans-domaines a,b          sauf ces domaines (HA_MCP_SANS_DOMAINES)
   --max-services N             au plus N outils de service (HA_MCP_MAX_SERVICES ; 0 = aucun)
+  --test                       MODE TEST (MCP_TEST_MODE=1) : instance Home Assistant simulée, aucun réseau, ni URL ni jeton lus
+  --test-approbateur R         mode test : approve|deny|timeout|absent pour les outils à validation (MCP_TEST_APPROVER, défaut deny)
+  --stats-fichier FICHIER      export JSON local des statistiques, réécrit après chaque appel (MCP_STATS_FILE)
   --presets DOSSIER            presets en plus de ceux embarqués (HA_MCP_PRESETS)
   --ecoute ADRESSE:PORT        http : adresse d'écoute (HA_MCP_ECOUTE, défaut 127.0.0.1:8765)
   --jeton-serveur-fichier F    http : fichier du jeton que les clients présentent (HA_MCP_JETON_FICHIER ; ou HA_MCP_JETON)
@@ -57,12 +61,14 @@ struct Args {
     serveur_fichier: Option<String>,
     ecoute: String,
     opts: Options,
+    test: bool,
 }
 
 fn lire_args() -> Result<Option<Args>, String> {
     let mut mode = None;
     let mut vals: std::collections::HashMap<String, String> = Default::default();
     let mut lecture_seule = env("HA_MCP_LECTURE_SEULE").is_some_and(|v| !matches!(v.as_str(), "0" | "false" | "non"));
+    let mut test = env("MCP_TEST_MODE").is_some_and(|v| !matches!(v.as_str(), "0" | "false" | "non"));
     let mut it = std::env::args().skip(1);
     while let Some(a) = it.next() {
         let (cle, val) = match a.split_once('=') {
@@ -79,8 +85,9 @@ fn lire_args() -> Result<Option<Args>, String> {
                 return Ok(None);
             }
             "--lecture-seule" => lecture_seule = true,
+            "--test" => test = true,
             "stdio" | "http" | "lister" if mode.is_none() => mode = Some(cle),
-            "--url" | "--jeton-fichier" | "--domaines" | "--sans-domaines" | "--max-services" | "--presets" | "--ecoute" | "--jeton-serveur-fichier" => {
+            "--test-approbateur" | "--stats-fichier" | "--url" | "--jeton-fichier" | "--domaines" | "--sans-domaines" | "--max-services" | "--presets" | "--ecoute" | "--jeton-serveur-fichier" => {
                 let v = val.or_else(|| it.next()).ok_or(format!("{cle} attend une valeur"))?;
                 vals.insert(cle, v);
             }
@@ -99,7 +106,14 @@ fn lire_args() -> Result<Option<Args>, String> {
         jeton_fichier: pris("--jeton-fichier", "HA_TOKEN_FILE"),
         serveur_fichier: pris("--jeton-serveur-fichier", "HA_MCP_JETON_FICHIER"),
         ecoute: pris("--ecoute", "HA_MCP_ECOUTE").unwrap_or_else(|| "127.0.0.1:8765".into()),
-        opts: Options { lecture_seule, filtre, presets: pris("--presets", "HA_MCP_PRESETS").map(Into::into) },
+        opts: Options {
+            lecture_seule,
+            filtre,
+            presets: pris("--presets", "HA_MCP_PRESETS").map(Into::into),
+            stats_fichier: pris("--stats-fichier", "MCP_STATS_FILE").map(Into::into),
+            approbateur: pris("--test-approbateur", "MCP_TEST_APPROVER").map(|v| Approbateur::lire(&v)).transpose()?.unwrap_or_default(),
+        },
+        test,
     }))
 }
 
@@ -116,9 +130,15 @@ async fn main() -> ExitCode {
 
 async fn lancer() -> Result<(), String> {
     let Some(a) = lire_args()? else { return Ok(()) };
-    let jeton = secret("HA_TOKEN", a.jeton_fichier, "jeton de Home Assistant (HA_TOKEN ou HA_TOKEN_FILE)")?;
     let jeton_serveur = if a.mode == "http" { Some(secret("HA_MCP_JETON", a.serveur_fichier, "jeton du serveur MCP (HA_MCP_JETON ou HA_MCP_JETON_FICHIER)")?) } else { None };
-    let app = Arc::new(App::new(Ha::new(&a.url, jeton)?, a.opts));
+    // mode test : ni URL ni jeton Home Assistant ne sont lus, le client réseau n'est jamais construit
+    let ha = if a.test {
+        eprintln!("ha-mcp : MODE TEST : instance simulée, aucun accès réseau, validations : {:?}", a.opts.approbateur);
+        Ha::new_test("simule://test")
+    } else {
+        Ha::new(&a.url, secret("HA_TOKEN", a.jeton_fichier, "jeton de Home Assistant (HA_TOKEN ou HA_TOKEN_FILE)")?)?
+    };
+    let app = Arc::new(App::new(ha, a.opts));
     let decouverte = tokio::time::timeout(Duration::from_secs(20), app.redecouvrir()).await.unwrap_or_else(|_| Err("délai dépassé (20 s)".into()));
     if a.mode == "lister" {
         decouverte.map_err(|e| format!("découverte impossible sur {} : {e}", a.url))?;

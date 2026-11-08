@@ -10,5 +10,10 @@ fantomes=$(printf '%s\n' "$doc" | grep -vxF "$src" || true)
 echo "source : $(printf '%s\n' "$src" | wc -l) outils fixes ; skill : $(printf '%s\n' "$doc" | wc -l)"
 [ -z "$manquants" ] || echo "MANQUANTS dans SKILL.md : $manquants"
 [ -z "$fantomes" ] || echo "FANTOMES dans SKILL.md : $fantomes"
-[ -z "$manquants$fantomes" ] && echo OK
-[ -z "$manquants$fantomes" ]
+sections=""
+for s in "## Possible" "## Impossible" "## Comment faire" "## Mode test" "## Stats"; do
+  grep -q "^$s\$" "$skill" || sections="$sections [$s]"
+done
+[ -z "$sections" ] || echo "SECTIONS absentes de SKILL.md :$sections"
+[ -z "$manquants$fantomes$sections" ] && echo OK
+[ -z "$manquants$fantomes$sections" ]

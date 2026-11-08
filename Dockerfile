@@ -6,6 +6,7 @@ WORKDIR /src
 COPY Cargo.toml Cargo.lock ./
 COPY src src
 COPY presets presets
+COPY test test
 RUN cargo build --release --locked && cp target/release/ha-mcp /ha-mcp
 
 FROM scratch

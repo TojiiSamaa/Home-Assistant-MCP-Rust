@@ -9,7 +9,10 @@ pub mod ha;
 pub mod http;
 pub mod outils;
 pub mod presets;
+pub mod reseau;
 pub mod schema;
+pub mod simule;
+pub mod stats;
 
 use std::collections::{BTreeSet, HashMap};
 use std::path::PathBuf;
@@ -21,6 +24,8 @@ use tokio::sync::watch;
 
 use crate::ha::{Ha, Session};
 use crate::schema::{Cible, Filtre};
+use crate::simule::Approbateur;
+use crate::stats::{Stats, Validation};
 
 /// Versions du protocole acceptées ; la première est proposée à un client qui en demande une autre.
 pub const VERSIONS: [&str; 4] = ["2025-06-18", "2025-11-25", "2025-03-26", "2024-11-05"];
@@ -60,6 +65,10 @@ pub struct Options {
     pub filtre: Filtre,
     /// Dossier de presets en plus de ceux embarqués (lecture, et écriture par preset_exporter).
     pub presets: Option<PathBuf>,
+    /// Export JSON local des statistiques, réécrit après chaque appel d'outil.
+    pub stats_fichier: Option<PathBuf>,
+    /// Mode test seulement : réponse de l'approbateur simulé aux outils qui demandent une validation.
+    pub approbateur: Approbateur,
 }
 
 #[derive(Default)]
@@ -83,6 +92,7 @@ pub struct App {
     pub generation: watch::Sender<u64>,
     /// Une application ou annulation de preset à la fois : l'instantané d'annulation doit voir ce qu'il remplace.
     pub verrou_presets: tokio::sync::Mutex<()>,
+    pub stats: Stats,
 }
 
 pub fn erreur_rpc(id: Value, code: i64, message: &str) -> Value {
@@ -104,7 +114,7 @@ pub fn tronquer(mut s: String) -> String {
 
 impl App {
     pub fn new(ha: Ha, opts: Options) -> App {
-        let app = App { ha, opts, etat: RwLock::new(Etat::default()), generation: watch::channel(0).0, verrou_presets: Default::default() };
+        let app = App { ha, opts, etat: RwLock::new(Etat::default()), generation: watch::channel(0).0, verrou_presets: Default::default(), stats: Stats::default() };
         app.poser(Value::Null, Value::Null, BTreeSet::new());
         app
     }
@@ -168,6 +178,10 @@ impl App {
 
     /// Veille sans fin : abonnement aux événements de services, reconnexion avec attente croissante (1 → 30 s).
     pub async fn veiller(&self) {
+        // mode test : tout est simulé, aucune connexion à ouvrir
+        if self.ha.est_test() {
+            return;
+        }
         let mut pause = 1;
         loop {
             let debut = tokio::time::Instant::now();
@@ -223,9 +237,38 @@ impl App {
         if !connu {
             return None;
         }
+        // validation simulée : mode test seulement, jamais d'effet sur le chemin réel
+        if self.ha.est_test()
+            && let Some(raison) = outils::exige_validation(nom, &a, cible.as_ref())
+            && let Err(e) = self.valider(nom, &raison)
+        {
+            return Some(Err(e));
+        }
         match cible {
             Some(c) => Some(self.ws_resultat(schema::appel(&c, a)).await.map(|r| ha::texte(&r))),
             None => outils::executer(self, nom, a).await,
+        }
+    }
+
+    /// L'approbateur simulé du mode test. `Ok` = approuvé : l'outil s'exécute contre l'instance simulée.
+    fn valider(&self, nom: &str, raison: &str) -> Result<(), String> {
+        match self.opts.approbateur {
+            Approbateur::Approve => {
+                self.stats.valider(Validation::Approuvee);
+                Ok(())
+            }
+            Approbateur::Deny => {
+                self.stats.valider(Validation::Refusee);
+                Err(format!("VALIDATION_REFUSEE : {nom} ({raison}) refusé par l'approbateur simulé ; rien n'a été exécuté"))
+            }
+            Approbateur::Timeout => {
+                self.stats.valider(Validation::Timeout);
+                Err(format!("VALIDATION_TIMEOUT : {nom} ({raison}) : pas de réponse de l'approbateur simulé ; rien n'a été exécuté"))
+            }
+            Approbateur::Absent => {
+                self.stats.valider(Validation::Indisponible);
+                Err(format!("VALIDATION_INDISPONIBLE : {nom} ({raison}) demande une confirmation et le client n'a pas de capacité de confirmation ; rien n'a été exécuté"))
+            }
         }
     }
 
@@ -273,12 +316,22 @@ impl App {
             Some(Value::Object(o)) => o.clone(),
             Some(_) => return Err((-32602, "params.arguments doit être un objet".into())),
         };
+        let debut = std::time::Instant::now();
         let issue = self.appeler(nom, args).await.ok_or((-32602, format!("outil inconnu : {nom}")))?;
+        let test = self.ha.est_test();
+        self.stats.noter(nom, issue.is_ok(), debut.elapsed(), test);
+        if let Some(f) = &self.opts.stats_fichier {
+            let _ = std::fs::write(f, self.stats.json(test).to_string());
+        }
         eprintln!("ha-mcp : outil {nom} → {}", if issue.is_ok() { "ok" } else { "erreur" });
         let (t, erreur) = match issue {
             Ok(t) => (t, false),
             Err(t) => (t, true),
         };
+        if test {
+            // marque du mode test : préfixe visible et _meta lisible par une machine
+            return Ok(json!({"content": [{"type": "text", "text": tronquer(format!("[TEST] {t}"))}], "isError": erreur, "_meta": {"test_mode": true}}));
+        }
         Ok(json!({"content": [{"type": "text", "text": tronquer(t)}], "isError": erreur}))
     }
 }

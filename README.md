@@ -134,7 +134,7 @@ cp -r skill/home-assistant-mcp-rust ~/.claude/skills/
 
 Sous Windows : `Copy-Item -Recurse skill\home-assistant-mcp-rust $HOME\.claude\skills\`.
 
-Skill portable (Claude Code, OpenCode, Hermes, Cursor, Codex) : copie le dossier dans le dossier de skills de ton client, ou laisse [AGENTS.md](AGENTS.md) la désigner ; `sh tests/verifier-skill.sh` vérifie qu'elle liste les 29 outils fixes.
+Skill portable (Claude Code, OpenCode, Hermes, Cursor, Codex) : copie le dossier dans le dossier de skills de ton client, ou laisse [AGENTS.md](AGENTS.md) la désigner ; `sh tests/verifier-skill.sh` vérifie qu'elle liste les 30 outils fixes ; mode test sans Home Assistant : `MCP_TEST_MODE=1 ha-mcp` (voir la skill).
 
 ### Exemples
 

@@ -1,0 +1,111 @@
+{
+  "config": {
+    "version": "2026.11.0-test",
+    "location_name": "Maison simulée",
+    "components": ["homeassistant", "light", "switch", "climate", "weather", "sensor", "binary_sensor", "automation", "script", "scene", "frontend", "lovelace", "shopping_list", "notify", "persistent_notification", "input_boolean", "recorder", "hassio"]
+  },
+  "services": {
+    "homeassistant": {
+      "restart": {"name": "Redémarrer", "description": "Redémarre Home Assistant (DESTRUCTIF, simulé)", "fields": {}},
+      "stop": {"name": "Arrêter", "description": "Arrête Home Assistant (DESTRUCTIF, simulé)", "fields": {}},
+      "reload_all": {"name": "Tout recharger", "description": "Recharge toute la configuration", "fields": {}},
+      "turn_on": {"name": "Allumer", "description": "Allume une entité", "fields": {}, "target": {"entity": {}}}
+    },
+    "light": {
+      "turn_on": {
+        "name": "Allumer", "description": "Allume une lumière",
+        "target": {"entity": {"domain": "light"}},
+        "fields": {
+          "brightness_pct": {"name": "Luminosité", "description": "Pourcentage", "example": 50, "selector": {"number": {"min": 0, "max": 100, "unit_of_measurement": "%"}}},
+          "transition": {"name": "Transition", "description": "Secondes", "selector": {"number": {"min": 0, "max": 300}}}
+        }
+      },
+      "turn_off": {"name": "Éteindre", "description": "Éteint une lumière", "target": {"entity": {"domain": "light"}}, "fields": {}},
+      "toggle": {"name": "Basculer", "description": "Bascule une lumière", "target": {"entity": {"domain": "light"}}, "fields": {}}
+    },
+    "switch": {
+      "turn_on": {"name": "Allumer", "description": "Allume une prise", "target": {"entity": {"domain": "switch"}}, "fields": {}},
+      "turn_off": {"name": "Éteindre", "description": "Éteint une prise", "target": {"entity": {"domain": "switch"}}, "fields": {}}
+    },
+    "climate": {
+      "set_temperature": {
+        "name": "Régler la température", "description": "Règle la consigne", "target": {"entity": {"domain": "climate"}},
+        "fields": {"temperature": {"name": "Température", "description": "Consigne", "required": true, "selector": {"number": {"min": 7, "max": 35, "step": 0.5, "unit_of_measurement": "°C"}}}}
+      }
+    },
+    "weather": {
+      "get_forecasts": {
+        "name": "Prévisions", "description": "Prévisions météo", "target": {"entity": {"domain": "weather"}},
+        "fields": {"type": {"name": "Type", "description": "daily, hourly", "required": true, "selector": {"select": {"options": ["daily", "hourly", "twice_daily"]}}}},
+        "response": {"optional": false}
+      }
+    },
+    "shopping_list": {
+      "add_item": {"name": "Ajouter", "description": "Ajoute un article", "fields": {"name": {"name": "Nom", "description": "Article", "required": true, "example": "lait", "selector": {"text": {}}}}}
+    },
+    "notify": {
+      "notify": {"name": "Notifier", "description": "Envoie une notification", "fields": {"message": {"name": "Message", "description": "Texte", "required": true, "selector": {"text": {}}}}}
+    },
+    "persistent_notification": {
+      "create": {"name": "Créer", "description": "Crée une notification persistante", "fields": {"message": {"name": "Message", "description": "Texte", "required": true, "selector": {"text": {}}}}},
+      "dismiss": {"name": "Effacer", "description": "Efface une notification persistante", "fields": {"notification_id": {"name": "Id", "description": "Identifiant", "required": true, "selector": {"text": {}}}}}
+    },
+    "input_boolean": {
+      "toggle": {"name": "Basculer", "description": "Bascule un interrupteur virtuel", "target": {"entity": {"domain": "input_boolean"}}, "fields": {}}
+    },
+    "automation": {
+      "trigger": {"name": "Déclencher", "description": "Déclenche une automatisation", "target": {"entity": {"domain": "automation"}}, "fields": {}},
+      "reload": {"name": "Recharger", "description": "Recharge les automatisations", "fields": {}}
+    },
+    "script": {
+      "reload": {"name": "Recharger", "description": "Recharge les scripts", "fields": {}},
+      "bonne_nuit": {"name": "Bonne nuit", "description": "Script bonne_nuit", "fields": {}}
+    },
+    "scene": {
+      "turn_on": {"name": "Activer", "description": "Active une scène", "target": {"entity": {"domain": "scene"}}, "fields": {}}
+    },
+    "frontend": {
+      "set_theme": {"name": "Thème", "description": "Règle le thème par défaut", "fields": {"name": {"name": "Nom", "description": "Thème", "required": true, "selector": {"text": {}}}, "mode": {"name": "Mode", "description": "dark ou light", "selector": {"select": {"options": ["dark", "light"]}}}}}
+    },
+    "recorder": {
+      "purge": {"name": "Purger", "description": "Purge l'historique (DESTRUCTIF, simulé)", "fields": {"keep_days": {"name": "Jours", "description": "Jours à garder", "selector": {"number": {"min": 0, "max": 365}}}}}
+    },
+    "hassio": {
+      "host_reboot": {"name": "Redémarrer l'hôte", "description": "Redémarre la machine (DESTRUCTIF, simulé)", "fields": {}},
+      "host_shutdown": {"name": "Éteindre l'hôte", "description": "Éteint la machine (DESTRUCTIF, simulé)", "fields": {}}
+    }
+  },
+  "states": [
+    {"entity_id": "light.salon", "state": "off", "attributes": {"friendly_name": "Salon"}, "last_changed": "2026-11-08T08:00:00+00:00"},
+    {"entity_id": "light.cuisine", "state": "on", "attributes": {"friendly_name": "Cuisine", "brightness": 180}, "last_changed": "2026-11-08T07:30:00+00:00"},
+    {"entity_id": "switch.prise_tv", "state": "off", "attributes": {"friendly_name": "Prise TV"}, "last_changed": "2026-11-07T22:00:00+00:00"},
+    {"entity_id": "sensor.temp_salon", "state": "21.5", "attributes": {"friendly_name": "Température salon", "unit_of_measurement": "°C"}, "last_changed": "2026-11-08T08:05:00+00:00"},
+    {"entity_id": "binary_sensor.porte_entree", "state": "off", "attributes": {"friendly_name": "Porte d'entrée"}, "last_changed": "2026-11-08T06:50:00+00:00"},
+    {"entity_id": "climate.salon", "state": "heat", "attributes": {"friendly_name": "Thermostat salon", "temperature": 20}, "last_changed": "2026-11-08T05:00:00+00:00"},
+    {"entity_id": "weather.maison", "state": "cloudy", "attributes": {"friendly_name": "Météo maison"}, "last_changed": "2026-11-08T08:00:00+00:00"},
+    {"entity_id": "automation.lumiere_coucher", "state": "on", "attributes": {"friendly_name": "Lumière au coucher", "id": "lumiere_coucher"}, "last_changed": "2026-11-01T10:00:00+00:00"},
+    {"entity_id": "script.bonne_nuit", "state": "off", "attributes": {"friendly_name": "Bonne nuit"}, "last_changed": "2026-11-01T10:00:00+00:00"},
+    {"entity_id": "scene.film", "state": "unknown", "attributes": {"friendly_name": "Film", "id": "film"}, "last_changed": "2026-11-01T10:00:00+00:00"},
+    {"entity_id": "input_boolean.vacances", "state": "off", "attributes": {"friendly_name": "Vacances"}, "last_changed": "2026-11-01T10:00:00+00:00"},
+    {"entity_id": "sun.sun", "state": "below_horizon", "attributes": {"friendly_name": "Soleil"}, "last_changed": "2026-11-08T16:50:00+00:00"}
+  ],
+  "automations": {
+    "automation": {"lumiere_coucher": {"id": "lumiere_coucher", "alias": "Lumière au coucher", "triggers": [{"trigger": "sun", "event": "sunset"}], "actions": [{"action": "light.turn_on", "target": {"entity_id": "light.salon"}}], "mode": "single"}},
+    "script": {"bonne_nuit": {"alias": "Bonne nuit", "sequence": [{"action": "light.turn_off", "target": {"entity_id": "all"}}]}},
+    "scene": {"film": {"id": "film", "name": "Film", "entities": {"light.salon": "off"}}}
+  },
+  "entity_registry": [
+    {"entity_id": "light.salon", "area_id": "salon", "device_id": null, "name": null, "platform": "demo"},
+    {"entity_id": "light.cuisine", "area_id": null, "device_id": "dev_cuisine", "name": null, "platform": "demo"},
+    {"entity_id": "sensor.temp_salon", "area_id": "salon", "device_id": null, "name": null, "platform": "demo"}
+  ],
+  "device_registry": [{"id": "dev_cuisine", "name": "Lampe cuisine", "area_id": "cuisine", "manufacturer": "Simulé"}],
+  "area_registry": [{"area_id": "salon", "name": "Salon", "floor_id": "rdc"}, {"area_id": "cuisine", "name": "Cuisine", "floor_id": "rdc"}],
+  "floor_registry": [{"floor_id": "rdc", "name": "Rez-de-chaussée", "level": 0}],
+  "label_registry": [{"label_id": "eclairage", "name": "Éclairage"}],
+  "dashboards": [{"id": "carte_test", "url_path": "carte-test", "title": "Carte test", "icon": "mdi:map", "show_in_sidebar": true, "require_admin": false, "mode": "storage"}],
+  "flow_handlers": ["shopping_list", "met", "sun", "input_boolean"],
+  "config_entries": [{"entry_id": "e1", "domain": "met", "title": "Météo", "state": "loaded", "source": "user", "disabled_by": null}],
+  "themes": {"default_theme": "default", "themes": {"nuit": {}, "clair": {}, "ios-light-mode-blue-red": {}}},
+  "panels": {"lovelace": {"component_name": "lovelace", "url_path": "lovelace"}, "energy": {"component_name": "energy", "url_path": "energy"}, "map": {"component_name": "map", "url_path": "map"}}
+}
