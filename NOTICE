@@ -1,0 +1,6 @@
+Home Assistant MCP Rust
+Copyright 2026 Toji. Sous licence Apache-2.0.
+
+Ce projet est tiré du serveur MCP de maison (Home Assistant Rust, Apache-2.0, même auteur) : format et presets
+embarqués (presets/), règles du transport MCP. Il parle à Home Assistant (https://github.com/home-assistant/core,
+Apache-2.0) par ses API publiques REST et WebSocket, sans en reprendre le code.

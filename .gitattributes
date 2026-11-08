@@ -1,0 +1,2 @@
+# fins de ligne LF partout : le test skill_a_jour compare la skill au texte généré
+* text=auto eol=lf

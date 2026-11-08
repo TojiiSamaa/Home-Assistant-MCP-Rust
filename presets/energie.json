@@ -1,0 +1,39 @@
+{
+  "id": "energie",
+  "nom": "Énergie",
+  "description": "Une page Énergie : cartes du tableau énergie de Home Assistant et une courbe (mini-graph-card) par capteur choisi. Thème Synthwave.",
+  "parametres": {
+    "titre": {"type": "texte", "defaut": "Énergie", "description": "Titre de la page"},
+    "icone": {"type": "icone", "defaut": "mdi:lightning-bolt", "description": "Icône de la page"},
+    "capteurs": {"type": "entites", "defaut": ["sensor.*energy*", "sensor.*power*"], "description": "Capteurs tracés en courbe (motifs « * » acceptés)"},
+    "heures": {"type": "nombre", "defaut": 24, "description": "Durée affichée par les courbes, en heures"},
+    "theme": {"type": "theme", "defaut": "synthwave", "description": "Thème à activer"},
+    "position": {"type": "nombre", "defaut": 1, "description": "Place de la page dans la barre latérale"}
+  },
+  "cartes": ["kalkih/mini-graph-card"],
+  "pages": [
+    {
+      "url_path": "maison-energie",
+      "title": "[[titre]]",
+      "icon": "[[icone]]",
+      "show_in_sidebar": true,
+      "config": {
+        "views": [
+          {
+            "title": "[[titre]]",
+            "path": "energie",
+            "cards": [
+              {"type": "energy-date-selection"},
+              {"type": "energy-distribution", "link_dashboard": true},
+              {"type": "energy-usage-graph"},
+              {"type": "energy-sources-table"},
+              {"$pour_chaque": "capteurs", "$modele": {"type": "custom:mini-graph-card", "name": "[[element_nom]]", "entities": ["[[element]]"], "hours_to_show": "[[heures]]"}}
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "theme": {"nom": "[[theme]]"},
+  "barre": {"ordre": ["maison-energie", "energy"], "masques": [], "position": "[[position]]"}
+}

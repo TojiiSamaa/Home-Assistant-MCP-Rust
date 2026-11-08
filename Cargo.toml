@@ -1,0 +1,32 @@
+[package]
+name = "home-assistant-mcp-rust"
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+description = "Home Assistant MCP Rust : serveur MCP pour Home Assistant (toutes versions récentes, et maison), outils découverts à l'exécution, un outil par service"
+repository = "https://github.com/TojiiSamaa/Home-Assistant-MCP-Rust"
+readme = "README.md"
+keywords = ["home-assistant", "mcp", "model-context-protocol"]
+
+[lib]
+name = "ha_mcp"
+path = "src/lib.rs"
+
+[[bin]]
+name = "ha-mcp"
+path = "src/main.rs"
+
+[dependencies]
+axum = { version = "0.8", default-features = false, features = ["http1", "tokio"] }
+futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }
+# déjà tiré par rustls : identifiants de session aléatoires
+ring = "0.17"
+serde_json = { version = "1", features = ["preserve_order"] }
+tokio = { version = "1", features = ["rt-multi-thread", "net", "time", "macros", "sync", "io-std", "io-util"] }
+tokio-tungstenite = { version = "0.27", default-features = false, features = ["connect", "handshake", "rustls-tls-webpki-roots"] }
+ureq = { version = "2", default-features = false, features = ["tls"] }
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = true

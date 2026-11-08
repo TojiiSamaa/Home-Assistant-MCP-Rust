@@ -1,0 +1,76 @@
+{
+  "id": "maison-de-base",
+  "nom": "Maison de base",
+  "description": "Trois pages : Accueil (résumé), Pièces (une carte par pièce), Lumières (une carte Mushroom par lumière). Thème Catppuccin automatique clair/sombre.",
+  "parametres": {
+    "titre_accueil": {"type": "texte", "defaut": "Accueil", "description": "Titre de la page d'accueil"},
+    "titre_pieces": {"type": "texte", "defaut": "Pièces", "description": "Titre de la page des pièces"},
+    "titre_lumieres": {"type": "texte", "defaut": "Lumières", "description": "Titre de la page des lumières"},
+    "icone_accueil": {"type": "icone", "defaut": "mdi:home", "description": "Icône de la page d'accueil"},
+    "pieces": {"type": "pieces", "defaut": "*", "description": "Pièces affichées (vide ou « * » : toutes)"},
+    "entites_accueil": {"type": "entites", "defaut": ["sun.sun"], "description": "Entités du résumé de l'accueil (« light.* » accepté)"},
+    "lumieres": {"type": "entites", "defaut": ["light.*"], "description": "Lumières de la page Lumières"},
+    "theme": {"type": "theme", "defaut": "Catppuccin Auto Latte Mocha", "description": "Thème à activer"},
+    "position": {"type": "nombre", "defaut": 0, "description": "Place des pages dans la barre latérale (0 = en haut)"}
+  },
+  "cartes": ["piitaya/lovelace-mushroom"],
+  "pages": [
+    {
+      "url_path": "maison-accueil",
+      "title": "[[titre_accueil]]",
+      "icon": "[[icone_accueil]]",
+      "show_in_sidebar": true,
+      "config": {
+        "views": [
+          {
+            "title": "[[titre_accueil]]",
+            "path": "accueil",
+            "cards": [
+              {"type": "markdown", "content": "## Bienvenue\nCette page vient du preset « Maison de base » : modifiez-la librement (crayon en haut à droite)."},
+              {"type": "entities", "title": "En bref", "entities": "[[entites_accueil]]"},
+              {"$pour_chaque": "pieces", "$modele": {"type": "area", "area": "[[element]]", "navigation_path": "/maison-pieces/areas-[[element]]"}}
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "url_path": "maison-pieces",
+      "title": "[[titre_pieces]]",
+      "icon": "mdi:sofa",
+      "show_in_sidebar": true,
+      "config": {
+        "views": [
+          {
+            "title": "[[titre_pieces]]",
+            "path": "pieces",
+            "cards": [
+              {"$pour_chaque": "pieces", "$modele": {"type": "area", "area": "[[element]]", "navigation_path": "/maison-pieces/areas-[[element]]"}}
+            ]
+          },
+          {"$pour_chaque": "pieces", "$modele": {"title": "[[element_nom]]", "path": "areas-[[element]]", "subview": true, "strategy": {"type": "area", "area": "[[element]]"}}}
+        ]
+      }
+    },
+    {
+      "url_path": "maison-lumieres",
+      "title": "[[titre_lumieres]]",
+      "icon": "mdi:lightbulb-group",
+      "show_in_sidebar": true,
+      "config": {
+        "views": [
+          {
+            "title": "[[titre_lumieres]]",
+            "path": "lumieres",
+            "cards": [
+              {"type": "custom:mushroom-title-card", "title": "[[titre_lumieres]]"},
+              {"$pour_chaque": "lumieres", "$modele": {"type": "custom:mushroom-light-card", "entity": "[[element]]", "name": "[[element_nom]]", "show_brightness_control": true}}
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "theme": {"nom": "[[theme]]"},
+  "barre": {"ordre": ["maison-accueil", "maison-pieces", "maison-lumieres"], "masques": [], "position": "[[position]]"}
+}

@@ -1,0 +1,76 @@
+name: ci-release
+
+# Tag v* : binaires (Linux x86_64 et aarch64 statiques, Windows x86_64), publication GitHub, image GHCR multi-arch.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  binaires:
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            nom: ha-mcp-linux-amd64
+          - os: ubuntu-24.04-arm
+            nom: ha-mcp-linux-arm64
+          - os: windows-latest
+            nom: ha-mcp-windows-amd64.exe
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Linux (musl, statique, dans Alpine)
+        if: runner.os == 'Linux'
+        run: |
+          docker run --rm -v "$PWD:/src" -w /src rust:1-alpine sh -c "apk add --no-cache build-base && cargo build --release --locked"
+          sudo cp target/release/ha-mcp "${{ matrix.nom }}"
+      - name: Windows (CRT statique)
+        if: runner.os == 'Windows'
+        shell: bash
+        env:
+          RUSTFLAGS: -C target-feature=+crt-static
+        run: |
+          rustup toolchain install stable --profile minimal && rustup default stable
+          cargo build --release --locked
+          cp target/release/ha-mcp.exe "${{ matrix.nom }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.nom }}
+          path: ${{ matrix.nom }}
+
+  publier:
+    needs: binaires
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - run: cd dist && sha256sum ha-mcp-* > SHA256SUMS
+      - name: Publication GitHub
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/* --title "$GITHUB_REF_NAME" --generate-notes
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - name: Version sans le v
+        id: v
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.release
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ghcr.io/tojiisamaa/home-assistant-mcp-rust:${{ steps.v.outputs.version }}
+            ghcr.io/tojiisamaa/home-assistant-mcp-rust:latest

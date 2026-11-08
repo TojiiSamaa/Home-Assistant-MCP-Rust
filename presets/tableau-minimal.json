@@ -1,0 +1,34 @@
+{
+  "id": "tableau-minimal",
+  "nom": "Tableau minimal",
+  "description": "Une seule page de tuiles, sans carte HACS, et une barre latérale épurée. Thème iOS clair.",
+  "parametres": {
+    "titre": {"type": "texte", "defaut": "Tableau", "description": "Titre de la page"},
+    "icone": {"type": "icone", "defaut": "mdi:view-dashboard-outline", "description": "Icône de la page"},
+    "entites": {"type": "entites", "defaut": ["sun.sun", "light.*", "switch.*"], "description": "Entités affichées en tuiles (motifs « * » acceptés)"},
+    "masques": {"type": "liste", "defaut": ["map", "logbook", "history"], "description": "Panneaux cachés de la barre latérale"},
+    "theme": {"type": "theme", "defaut": "ios-light-mode-blue-red", "description": "Thème à activer"}
+  },
+  "cartes": [],
+  "pages": [
+    {
+      "url_path": "maison-minimal",
+      "title": "[[titre]]",
+      "icon": "[[icone]]",
+      "show_in_sidebar": true,
+      "config": {
+        "views": [
+          {
+            "title": "[[titre]]",
+            "path": "tableau",
+            "cards": [
+              {"$pour_chaque": "entites", "$modele": {"type": "tile", "entity": "[[element]]"}}
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "theme": {"nom": "[[theme]]"},
+  "barre": {"ordre": ["maison-minimal"], "masques": "[[masques]]", "position": 0}
+}
