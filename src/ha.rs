@@ -3,20 +3,24 @@
 //! seulement dans l'en-tête `Authorization` et le message `auth` : jamais dans une réponse ni un journal.
 
 use std::collections::VecDeque;
+use std::sync::Arc;
 use std::time::Duration;
 
 use futures_util::{SinkExt, StreamExt};
 use serde_json::{Map, Value, json};
-use tokio::net::TcpStream;
-use tokio_tungstenite::tungstenite::Message;
-use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
+
+use crate::reseau::{self, Client, Flux, Message};
+use crate::simule::Simule;
 
 pub const DELAI: Duration = Duration::from_secs(30);
 
 pub struct Ha {
     pub base: String,
     jeton: String,
-    agent: ureq::Agent,
+    /// Client réseau réel : `None` en mode test (il n'est jamais construit).
+    client: Option<Client>,
+    /// Instance Home Assistant simulée : `Some` en mode test seulement.
+    pub simule: Option<Arc<Simule>>,
 }
 
 /// Réponse REST : statut et corps (JSON lu, sinon le texte brut en `Value::String`).
@@ -79,36 +83,42 @@ impl Ha {
         if !(base.starts_with("http://") || base.starts_with("https://")) {
             return Err(format!("adresse de Home Assistant invalide (http:// ou https:// attendu) : {base}"));
         }
-        let agent = ureq::AgentBuilder::new().timeout(DELAI).build();
-        Ok(Ha { base, jeton, agent })
+        Ok(Ha { base, jeton, client: Some(reseau::client(DELAI)), simule: None })
+    }
+
+    /// Mode test : ni URL ni jeton ne sont lus ni utilisés, le client réseau n'est pas construit, tout répond depuis
+    /// l'instance simulée et le coupe-circuit réseau est fermé pour le reste du processus.
+    pub fn new_test(base: &str) -> Ha {
+        reseau::activer_test();
+        Ha { base: base.trim().to_string(), jeton: String::new(), client: None, simule: Some(Arc::new(Simule::nouveau())) }
+    }
+
+    pub fn est_test(&self) -> bool {
+        self.simule.is_some()
+    }
+
+    /// Le client réseau réel existe-t-il ? Jamais en mode test.
+    pub fn client_construit(&self) -> bool {
+        self.client.is_some()
     }
 
     /// Une requête REST (`chemin` commence par /api/).
     pub async fn rest(&self, methode: &str, chemin: &str, corps: Option<&Value>) -> Result<Rep, String> {
-        let (agent, url, auth) = (self.agent.clone(), format!("{}{chemin}", self.base), format!("Bearer {}", self.jeton));
-        let (m, corps, quoi) = (methode.to_string(), corps.map(Value::to_string), format!("{methode} {chemin}"));
-        // ureq est synchrone : hors des fils de l'exécuteur
-        tokio::task::spawn_blocking(move || {
-            let req = agent.request(&m, &url).set("Authorization", &auth);
-            let rep = match corps {
-                Some(c) => req.set("Content-Type", "application/json").send_string(&c),
-                None => req.call(),
-            };
-            let rep = match rep {
-                Ok(r) | Err(ureq::Error::Status(_, r)) => r,
-                Err(e) => return Err(format!("échec de la requête {quoi} : {e}")),
-            };
-            let statut = rep.status();
-            let brut = rep.into_string().map_err(|e| format!("lecture de la réponse {quoi} : {e}"))?;
-            Ok(Rep { statut, corps: serde_json::from_str(&brut).unwrap_or(Value::String(brut)) })
-        })
-        .await
-        .map_err(|e| e.to_string())?
+        if let Some(s) = &self.simule {
+            return Ok(s.rest(methode, chemin, corps));
+        }
+        let client = self.client.as_ref().ok_or("client réseau absent")?;
+        let (url, auth, quoi) = (format!("{}{chemin}", self.base), format!("Bearer {}", self.jeton), format!("{methode} {chemin}"));
+        let (statut, corps) = reseau::http(client, methode, &url, &auth, corps.map(Value::to_string), &quoi).await?;
+        Ok(Rep { statut, corps })
     }
 
     /// Une commande sur une connexion neuve : le message de réponse (`result` ou `pong`), et les événements de
     /// l'abonnement reçus pendant `attente` (commandes subscribe_*). Fermer la connexion clôt l'abonnement.
     pub async fn ws(&self, commande: Map<String, Value>, attente: Duration) -> Result<(Value, Vec<Value>), String> {
+        if let Some(s) = &self.simule {
+            return Ok((s.commande(&commande), vec![]));
+        }
         let echange = async {
             let mut s = Session::ouvrir(self).await?;
             let r = s.commande(commande).await?;
@@ -129,6 +139,9 @@ impl Ha {
 
     /// Plusieurs commandes sur une même connexion, envoyées d'un coup : un message de réponse par commande.
     pub async fn lot(&self, commandes: Vec<Value>) -> Result<Vec<Value>, String> {
+        if let Some(s) = &self.simule {
+            return Ok(commandes.iter().enumerate().map(|(i, c)| s.commande_numerotee(&objet(c.clone()), i as u64 + 1)).collect());
+        }
         let echange = async {
             let mut s = Session::ouvrir(self).await?;
             let mut ids = Vec::new();
@@ -153,8 +166,6 @@ impl Ha {
     }
 }
 
-type Flux = WebSocketStream<MaybeTlsStream<TcpStream>>;
-
 /// Une connexion WebSocket authentifiée. Les messages regroupés (tableau JSON) sont rendus un par un.
 pub struct Session {
     s: Flux,
@@ -166,10 +177,7 @@ impl Session {
     pub async fn ouvrir(ha: &Ha) -> Result<Session, String> {
         // http → ws, https → wss
         let url = format!("{}/api/websocket", ha.base.replacen("http", "ws", 1));
-        let (s, _) = tokio::time::timeout(DELAI, tokio_tungstenite::connect_async(url.as_str()))
-            .await
-            .map_err(|_| "délai de connexion WebSocket dépassé".to_string())?
-            .map_err(|e| format!("connexion WebSocket : {e}"))?;
+        let s = reseau::ws_ouvrir(&url, DELAI).await?;
         let mut session = Session { s, file: VecDeque::new(), id: 0 };
         let m = session.suivant().await?;
         if m["type"] != "auth_required" {

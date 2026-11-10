@@ -54,6 +54,29 @@ pub fn commande_lecture(t: &str) -> bool {
     t.starts_with("get_") || t.starts_with("subscribe_") || t.ends_with("/list") || t.ends_with("/get") || t.ends_with("/info") || EXACTES.contains(&t)
 }
 
+/// Outils fixes qui demandent TOUJOURS une validation (ils remplacent ou suppriment de la configuration).
+pub const VALIDATION_FIXE: [&str; 5] = ["tableau_enregistrer", "page_supprimer", "automatisme_supprimer", "preset_appliquer", "preset_annuler"];
+/// Services dont l'appel demande une validation (arrêt, redémarrage, purge) : `appeler_service` et leur outil dédié.
+pub const SERVICES_SENSIBLES: [(&str, &str); 5] = [("homeassistant", "restart"), ("homeassistant", "stop"), ("hassio", "host_reboot"), ("hassio", "host_shutdown"), ("recorder", "purge")];
+
+/// Pourquoi cet appel demande une validation (`None` : aucune). Ne sert qu'à l'approbateur simulé du mode test.
+pub fn exige_validation(nom: &str, a: &Map<String, Value>, service: Option<&crate::schema::Cible>) -> Option<String> {
+    let sensible = |d: &str, s: &str| SERVICES_SENSIBLES.contains(&(d, s)).then(|| format!("service sensible {d}.{s}"));
+    if let Some(c) = service {
+        return sensible(&c.domaine, &c.service);
+    }
+    match nom {
+        n if VALIDATION_FIXE.contains(&n) => Some("remplace ou supprime de la configuration".into()),
+        "appeler_service" => sensible(chaine(a, "domain")?, chaine(a, "service")?),
+        "rest" => {
+            let m = chaine(a, "method").unwrap_or("GET").to_ascii_uppercase();
+            (m != "GET" && chaine(a, "path") != Some("/api/template")).then(|| format!("requête REST {m}"))
+        }
+        "ws" => chaine(a, "type").filter(|t| !commande_lecture(t)).map(|t| format!("commande WebSocket d'écriture {t}")),
+        _ => None,
+    }
+}
+
 fn obj(props: Value, requis: &[&str]) -> Value {
     let mut s = json!({"type": "object", "properties": props});
     if !requis.is_empty() {
@@ -174,6 +197,8 @@ pub fn generiques(absentes: &BTreeSet<String>, lecture_seule: bool) -> Vec<Def> 
           json!({"type": "object", "properties": {"type": {"type": "string"}, "attente_ms": {"type": "integer", "minimum": 0, "maximum": ATTENTE_MAX_MS}}, "required": ["type"], "additionalProperties": true})),
         d("rest", true, None, "N'IMPORTE QUELLE requête REST sous /api/ (ex. GET /api/config, GET /api/error_log). Réponse : statut + corps. En --lecture-seule : GET seulement.",
           obj(json!({"method": {"type": "string", "description": "GET (défaut), POST, PUT, PATCH, DELETE"}, "path": {"type": "string", "description": "chemin commençant par /api/, requête comprise"}, "body": {"description": "corps JSON"}}), &["path"])),
+        d("ha_stats", true, None, "Statistiques d'usage de ce serveur : appels par outil, erreurs, latence p50/p95, dernier appel, appels réels ou en mode test, accès réseau coupés, validations simulées (JSON).",
+          obj(json!({}), &[])),
         d("lister_outils", true, None, "Liste complète, en markdown, des outils de cette instance : génériques et un par service, avec leurs paramètres.",
           obj(json!({}), &[])),
     ];
@@ -319,6 +344,7 @@ pub async fn executer(app: &App, nom: &str, a: Map<String, Value>) -> Option<Iss
         "ws" => ws(app, a).await,
         "rest" => rest(app, &a).await,
         "lister_outils" => Ok(markdown(app)),
+        "ha_stats" => Ok(app.stats.json(app.ha.est_test()).to_string()),
         _ => return None,
     })
 }
